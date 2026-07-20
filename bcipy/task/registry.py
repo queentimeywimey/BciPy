@@ -32,7 +32,7 @@ class TaskRegistry:
         """
         # Import task modules to ensure all tasks are discovered
         from bcipy.task import actions  # noqa
-        from bcipy.task.paradigm import matrix, rsvp, vep  # noqa
+        from bcipy.task.paradigm import image, matrix, rsvp, vep  # noqa
 
         self.registry_dict: Dict[str, Type[Task]] = {}
         self.collect_subclasses(Task)  # type: ignore[type-abstract]

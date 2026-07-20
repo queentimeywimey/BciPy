@@ -97,7 +97,7 @@ You will need to install the prerequisites defined in `scripts\shell\linux_requi
 
 ### Windows
 
-If you are using a Windows machine, you will need to install the [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+If you are using a Windows machine, you will need to install the [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). You can run `scripts\shell\windows_requirements.ps1` from a PowerShell prompt at the root of the repo (with [conda](https://docs.conda.io/en/latest/miniconda.html) installed and on PATH) to create a `bcipy` conda environment with a compatible Python version, install the Visual C++ Build Tools (via winget), and install BciPy in editable mode with its dev dependencies into that environment.
 
 ### Mac
 

@@ -551,6 +551,8 @@ class BCInterface(BCIGui):
         if self.alert:
             cmd += ' -a'
 
+        print(f"{cmd}")
+
         return cmd
 
     def _execute_experiment(self, cmd: str) -> None:

@@ -174,7 +174,7 @@
     "type": "directorypath"
   },
   "full_screen": {
-    "value": "false",
+    "value": "true",
     "section": "task_config",
     "name": "Full Screen Mode",
     "helpTip": "If ‘true’, the task will be displayed in full screen mode. If ‘false’, the task will be displayed in a window.",
@@ -898,5 +898,68 @@
     ],
     "editable": false,
     "type": "str"
+  },
+  "diffusion_image_path": {
+    "value": "images/processed",
+    "section": "diffusion_task_config",
+    "name": "Diffusion Image Directory",
+    "helpTip": "Specifies the directory containing per-image folders of diffusion timestep PNGs for the Diffusion Roundtrip task. Default: diffusion_output",
+    "recommended": "",
+    "editable": false,
+    "type": "directorypath"
+  },
+  "diffusion_noise_groups": {
+    "value": "1",
+    "section": "diffusion_task_config",
+    "name": "Diffusion Noise Groups",
+    "helpTip": "Specifies the number of clean-image-break repetitions per direction in the Diffusion Roundtrip task. Default: 1",
+    "recommended": "",
+    "editable": false,
+    "type": "int"
+  },
+  "diffusion_noise_per_group": {
+    "value": "9",
+    "section": "diffusion_task_config",
+    "name": "Diffusion Noise Images Per Group",
+    "helpTip": "Specifies the number of noisy images shown per group in the Diffusion Roundtrip task. Default: 9",
+    "recommended": "",
+    "editable": false,
+    "type": "int"
+  },
+  "diffusion_image_scale": {
+    "value": "0.8",
+    "section": "diffusion_task_config",
+    "name": "Diffusion Image Scale",
+    "helpTip": "Specifies the image height as a fraction of the window height in the Diffusion Roundtrip task. Default: 0.8",
+    "recommended": "",
+    "editable": false,
+    "type": "float"
+  },
+  "diffusion_time_black": {
+    "value": "1.0",
+    "section": "diffusion_task_config",
+    "name": "Diffusion Black Screen Duration (sec)",
+    "helpTip": "Specifies the duration (in seconds) of the black screen shown between stimuli in the Diffusion Roundtrip task. Default: 1.0",
+    "recommended": "",
+    "editable": false,
+    "type": "float"
+  },
+  "diffusion_time_clean": {
+    "value": "1.0",
+    "section": "diffusion_task_config",
+    "name": "Diffusion Clean Image Duration (sec)",
+    "helpTip": "Specifies the duration (in seconds) the clean (unnoised) image is displayed during break periods in the Diffusion Roundtrip task. Default: 1.0",
+    "recommended": "",
+    "editable": false,
+    "type": "float"
+  },
+  "diffusion_time_noise": {
+    "value": "1.0",
+    "section": "diffusion_task_config",
+    "name": "Diffusion Noise Image Duration (sec)",
+    "helpTip": "Specifies the duration (in seconds) each noisy image is displayed in the Diffusion Roundtrip task. Default: 1.0",
+    "recommended": "",
+    "editable": false,
+    "type": "float"
   }
 }
