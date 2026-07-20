@@ -24,6 +24,7 @@ Roundtrip sequence per folder (~3 min, 156 s stim):
 """
 import logging
 import os
+import random
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
@@ -142,8 +143,10 @@ class DiffusionRoundtripTask(Task):
     # ------------------------------------------------------------------
 
     def _get_folders(self) -> List[Path]:
-        """Return sorted list of image folders under diffusion_output."""
-        return sorted(p for p in self.diffusion_dir.iterdir() if p.is_dir())
+        """Return image folders under diffusion_output in randomized order."""
+        folders = [p for p in self.diffusion_dir.iterdir() if p.is_dir()]
+        random.shuffle(folders)
+        return folders
 
     def _get_images(self, folder: Path) -> Tuple[str, List[str]]:
         """Return ``(clean_path, sorted_noisy_paths)`` for a folder.
