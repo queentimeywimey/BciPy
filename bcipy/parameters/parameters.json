@@ -927,7 +927,7 @@
     "type": "int"
   },
   "diffusion_image_scale": {
-    "value": "1.2",
+    "value": "1.5",
     "section": "diffusion_task_config",
     "name": "Diffusion Image Scale",
     "helpTip": "Specifies the image height as a fraction of the window height in the Diffusion Roundtrip task. Default: 0.8",
