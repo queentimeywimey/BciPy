@@ -14,6 +14,9 @@ For each input image, a subfolder is created containing:
   ...
   step_29.png  →  heavily noised (near pure noise)
 
+If an image's subfolder already contains every expected step file, that image
+is skipped (no regeneration, no overwrite). Pass --force to regenerate anyway.
+
 Usage:
     python forward_diffusion.py --input_dir ./images --output_dir ./diffusion_output
 
@@ -164,12 +167,13 @@ def forward_diffuse_image(
 # Main processing loop
 # ---------------------------------------------------------------------------
 
-def process_library(input_dir: str, output_dir: str) -> None:
+def process_library(input_dir: str, output_dir: str, force: bool = False) -> None:
     """Process all images in input_dir and write diffusion steps to output_dir.
 
     Args:
         input_dir: Directory containing source images.
         output_dir: Root directory where per-image subfolders will be created.
+        force: If True, regenerate steps even if all output files already exist.
     """
     input_path = Path(input_dir)
     output_path = Path(output_dir)
@@ -214,6 +218,14 @@ def process_library(input_dir: str, output_dir: str) -> None:
     for image_file in tqdm(image_files, desc="Processing images", unit="img"):
         stem = image_file.stem  # filename without extension
         image_output_dir = output_path / stem
+
+        expected_files = [
+            image_output_dir / f"{stem}_t{t:03d}.png" for t in timesteps
+        ]
+        if not force and all(f.exists() for f in expected_files):
+            tqdm.write(f"  [SKIP] All {NUM_STEPS} steps already exist → '{image_output_dir}'")
+            continue
+
         image_output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -272,10 +284,16 @@ if __name__ == "__main__":
         help="Longest-edge size in pixels; aspect ratio is preserved "
              f"(default: {MAX_IMAGE_SIZE})",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate steps even if all output files already exist "
+             "(default: skip images whose steps are all already present)",
+    )
     args = parser.parse_args()
 
     # Allow CLI overrides
     NUM_STEPS = args.steps
     MAX_IMAGE_SIZE = args.size
 
-    process_library(args.input_dir, args.output_dir)
+    process_library(args.input_dir, args.output_dir, args.force)

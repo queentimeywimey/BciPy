@@ -5,6 +5,14 @@ For each folder in diffusion_output, all 32 noisy timesteps are shown across two
 directions (clean-to-noise then noise-to-clean), divided into 4 groups of 8 with a
 clean-image break before each group.
 
+Session structure:
+
+    Instructions screen (wait button) |
+    "Practice Rounds" screen (wait button) |
+    Roundtrip for each folder prefixed "practice" |
+    "Data Collection" screen (wait button) |
+    Roundtrip for every other folder
+
 Roundtrip sequence per folder (~3 min, 156 s stim):
 
     Clean-to-Noise:
@@ -23,10 +31,10 @@ Roundtrip sequence per folder (~3 min, 156 s stim):
         1s Black | 2s Clean  ← final break
 """
 import logging
-import os
 import random
+import re
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 
 from psychopy import core, event, visual
 
@@ -47,6 +55,21 @@ from bcipy.helpers.clock import Clock
 from bcipy.task import Task, TaskData, TaskMode
 
 logger = logging.getLogger(SESSION_LOG_FILENAME)
+
+PRACTICE_PREFIX = 'practice'
+
+INSTRUCTIONS_TEXT = (
+    "In this experiment you will try to continue seeing the original image "
+    "as the noise increases. After reaching full noise, you will be shown "
+    "the original image again, and you will then try to see the original "
+    "image as the noise decreases.\n\nLet's practice."
+)
+
+
+def _natural_sort_key(name: str) -> List[Union[int, str]]:
+    """Split name into text/number parts so e.g. 'practice2' < 'practice10'."""
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r'(\d+)', name)]
 
 
 class DiffusionRoundtripTask(Task):
@@ -142,10 +165,27 @@ class DiffusionRoundtripTask(Task):
     # Image helpers
     # ------------------------------------------------------------------
 
-    def _get_folders(self) -> List[Path]:
-        """Return image folders under diffusion_output in randomized order."""
-        folders = [p for p in self.diffusion_dir.iterdir() if p.is_dir()]
-        random.shuffle(folders)
+    def _get_folders(
+            self,
+            predicate: Callable[[str], bool],
+            shuffle: bool = True) -> List[Path]:
+        """Return image folders under diffusion_output matching predicate.
+
+        Args:
+            predicate: Called with each folder's name; only matching folders
+                are included.
+            shuffle: If True, folders are randomized. Otherwise they are
+                returned in natural (numeric-aware) name order, e.g.
+                'practice2' before 'practice10'.
+        """
+        folders = [
+            p for p in self.diffusion_dir.iterdir()
+            if p.is_dir() and predicate(p.name)
+        ]
+        if shuffle:
+            random.shuffle(folders)
+        else:
+            folders.sort(key=lambda p: _natural_sort_key(p.name))
         return folders
 
     def _get_images(self, folder: Path) -> Tuple[str, List[str]]:
@@ -174,15 +214,27 @@ class DiffusionRoundtripTask(Task):
         self.window.flip()
         core.wait(self.time_black)
 
-    def _show_fixation_wait(self) -> None:
-        """Show a fixation cross and block until space, return, or escape is pressed."""
-        fix = visual.TextStim(
+    def _show_text_and_wait(
+            self,
+            text: str,
+            height: float = 0.1,
+            wrap_width: Optional[float] = None) -> None:
+        """Show text on a black background and block until a key is pressed.
+
+        Args:
+            text: Text to display.
+            height: Text height, in the window's units.
+            wrap_width: Width at which to wrap text, in the window's units.
+                None uses PsychoPy's default.
+        """
+        stim = visual.TextStim(
             win=self.window,
-            text='+',
+            text=text,
             color='white',
-            height=0.1,
+            height=height,
+            wrapWidth=wrap_width,
         )
-        fix.draw()
+        stim.draw()
         self.window.flip()
         keys = event.waitKeys(keyList=['space', 'return', 'escape'])
         if keys and 'escape' in keys:
@@ -191,13 +243,17 @@ class DiffusionRoundtripTask(Task):
             if self.exit_callback:
                 self.exit_callback()
 
+    def _show_fixation_wait(self) -> None:
+        """Show a fixation cross and block until space, return, or escape is pressed."""
+        self._show_text_and_wait('+', height=0.1)
+
     def _ensure_calibration(self) -> None:
         """Send a one-shot calibration trigger for EEG clock synchronisation."""
         if self._first_stim_time is not None:
             return
         calibration_time = _calibration_trigger(
             self.experiment_clock,
-            trigger_type='image',
+            trigger_type='text',
             display=self.window)
         self._first_stim_time = calibration_time[-1]
         if hasattr(self.daq, 'clients_by_type'):
@@ -255,77 +311,94 @@ class DiffusionRoundtripTask(Task):
     # Roundtrip directions
     # ------------------------------------------------------------------
 
-    def _run_clean_to_noise(
-            self, clean: str, noisy: List[str], folder_name: str) -> None:
-        """Clean-to-noise direction.
+    def _run_direction(
+            self,
+            clean: str,
+            noisy: List[str],
+            folder_name: str,
+            reverse: bool) -> None:
+        """Run one roundtrip direction: clean-to-noise, or the reverse.
 
         1s Black | Fixation (wait button) |
         Repeat 4 times (
             1s Black | 2s Clean |
-            Repeat 8 times ( 1s Black | 1s +Noise )
+            Repeat 8 times ( 1s Black | 1s Noise )
         )
+        If reverse, a final "1s Black | 2s Clean" break is shown at the end.
+
+        Args:
+            clean: Path to the clean (unnoised) image.
+            noisy: Ascending-order paths to the noisy timesteps.
+            folder_name: Name of the current image folder, for trigger labels.
+            reverse: False for clean-to-noise (t000 → t992); True for
+                noise-to-clean (t992 → t000), with a final clean break.
         """
-        self._record_system_trigger(f'{folder_name}_c2n_start')
+        suffix = 'n2c' if reverse else 'c2n'
+        self._record_system_trigger(f'{folder_name}_{suffix}_start')
         self._show_black()
         self._show_fixation_wait()
         if self.should_stop:
             return
 
-        for group_idx in range(self.noise_groups):
+        group_indices = (
+            range(self.noise_groups - 1, -1, -1) if reverse
+            else range(self.noise_groups))
+        for group_idx in group_indices:
             self._show_black()
             self._show_stimulus(
                 clean, self.time_clean, 'clean_break', TriggerType.NONTARGET)
 
             start = group_idx * self.noise_per_group
-            for noise_path in noisy[start:start + self.noise_per_group]:
+            group_images = noisy[start:start + self.noise_per_group]
+            if reverse:
+                group_images = reversed(group_images)
+            for noise_path in group_images:
                 self._show_black()
-                label = os.path.splitext(os.path.basename(noise_path))[0]
+                label = Path(noise_path).stem
                 self._show_stimulus(
                     noise_path, self.time_noise, label, TriggerType.TARGET)
 
-    def _run_noise_to_clean(
-            self, clean: str, noisy: List[str], folder_name: str) -> None:
-       
-        self._record_system_trigger(f'{folder_name}_n2c_start')
-        self._show_black()
-        self._show_fixation_wait()
-        if self.should_stop:
-            return
-
-        for group_idx in range(self.noise_groups - 1, -1, -1):
+        if reverse:
+            # Final clean-image break at end of noise-to-clean direction
             self._show_black()
             self._show_stimulus(
-                clean, self.time_clean, 'clean_break', TriggerType.NONTARGET)
-
-            start = group_idx * self.noise_per_group
-            for noise_path in reversed(noisy[start:start + self.noise_per_group]):
-                self._show_black()
-                label = os.path.splitext(os.path.basename(noise_path))[0]
-                self._show_stimulus(
-                    noise_path, self.time_noise, label, TriggerType.TARGET)
-
-        # Final clean-image break at end of noise-to-clean direction
-        self._show_black()
-        self._show_stimulus(
-            clean, self.time_clean, 'clean_end', TriggerType.NONTARGET)
+                clean, self.time_clean, 'clean_end', TriggerType.NONTARGET)
 
     # ------------------------------------------------------------------
     # Main execution loop
     # ------------------------------------------------------------------
 
-    def execute(self) -> TaskData:
-        """Run the full roundtrip task across all diffusion_output folders."""
-        logger.info(f'Starting {self.name}!')
-
-        for folder in self._get_folders():
+    def _run_folders(self, folders: List[Path]) -> None:
+        """Run the clean-to-noise/noise-to-clean roundtrip for each folder."""
+        for folder in folders:
             if self.should_stop:
                 break
             logger.info(f'Roundtrip: {folder.name}')
             clean, noisy = self._get_images(folder)
-            self._run_clean_to_noise(clean, noisy, folder.name)
+            self._run_direction(clean, noisy, folder.name, reverse=False)
             if self.should_stop:
                 break
-            self._run_noise_to_clean(clean, noisy, folder.name)
+            self._run_direction(clean, noisy, folder.name, reverse=True)
+
+    def execute(self) -> TaskData:
+        """Run the practice rounds, then the full roundtrip task."""
+        logger.info(f'Starting {self.name}!')
+
+        self._show_text_and_wait(INSTRUCTIONS_TEXT, height=0.06, wrap_width=1.6)
+
+        if not self.should_stop:
+            self._show_text_and_wait('Practice Rounds', height=0.12)
+        if not self.should_stop:
+            practice_folders = self._get_folders(
+                lambda name: name.startswith(PRACTICE_PREFIX), shuffle=False)
+            self._run_folders(practice_folders)
+
+        if not self.should_stop:
+            self._show_text_and_wait('Data Collection', height=0.12)
+        if not self.should_stop:
+            data_folders = self._get_folders(
+                lambda name: not name.startswith(PRACTICE_PREFIX))
+            self._run_folders(data_folders)
 
         self.cleanup()
         return TaskData(save_path=self.file_save, task_dict={})
