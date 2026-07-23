@@ -561,7 +561,7 @@ class BCInterface(BCIGui):
         Args:
             cmd (str): The command to execute.
         """
-        output = subprocess.run(cmd, shell=True)
+        output = subprocess.run(cmd, shell=True, stderr=subprocess.PIPE)
         if output.returncode != 0:
             self.throw_alert_message(
                 title='BciPy Alert',
